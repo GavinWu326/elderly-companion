@@ -1,22 +1,13 @@
-version: '3.8'
-
 services:
-  server:
-    build: ./server
+  app:
+    build: .
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_PATH=/app/data/elderly-companion.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
-      - ./server/data:/app/data
-    restart: unless-stopped
-
-  client:
-    build: ./client
-    ports:
-      - "5173:5173"
-    depends_on:
-      - server
+      - ./data:/app/data
     restart: unless-stopped
