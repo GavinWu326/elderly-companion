@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_PATH=/app/data/elderly-companion.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./server/src:/app/src
+      - ./client/dist:/app/client/dist
+      - ./data:/app/data
+    command: sh -c "npm install -g nodemon && nodemon src/server.js"
+    restart: unless-stopped
