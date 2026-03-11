@@ -59,6 +59,20 @@ export const useUserStore = defineStore('user', () => {
     return response.data
   }
 
+  // 从 localStorage 恢复用户状态（页面刷新后调用）
+  const restoreFromStorage = async () => {
+    const userId = localStorage.getItem('userId')
+    if (!userId || user.value) return
+    try {
+      user.value = { id: parseInt(userId) }
+      await fetchUserInfo()
+    } catch (error) {
+      user.value = null
+      localStorage.removeItem('userId')
+      localStorage.removeItem('phone')
+    }
+  }
+
   // 退出登录
   const logout = () => {
     user.value = null
@@ -74,6 +88,7 @@ export const useUserStore = defineStore('user', () => {
     register,
     updateUserInfo,
     fetchUserInfo,
+    restoreFromStorage,
     addContact,
     deleteContact,
     logout

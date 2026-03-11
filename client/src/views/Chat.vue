@@ -55,30 +55,48 @@
       </div>
     </div>
 
-    <div class="voice-area">
-      <div class="voice-hint" v-if="!chatStore.isRecording">按住圆圈说话</div>
-      <div class="voice-hint recording" v-else>正在聆听，松开发送...</div>
+    <div class="input-area">
+      <div v-if="chatStore.isRecording" class="recording-bar">
+        <div class="rec-waves">
+          <span v-for="i in 5" :key="i" class="wave" :style="`animation-delay:${i*0.1}s`"></span>
+        </div>
+        <span class="rec-text">正在聆听，松开停止...</span>
+        <button class="rec-cancel" @mouseup="stopRecording" @touchend.prevent="stopRecording">松开</button>
+      </div>
 
-      <div class="voice-wrap">
-        <div v-if="chatStore.isRecording" class="ring ring1"></div>
-        <div v-if="chatStore.isRecording" class="ring ring2"></div>
+      <div v-else class="input-bar">
+        <textarea
+          v-model="textInput"
+          class="text-input"
+          placeholder="输入消息..."
+          rows="1"
+          @keydown.enter.exact.prevent="handleSendText"
+          @input="autoResize"
+          ref="textareaRef"
+        ></textarea>
+
         <button
-          class="voice-btn"
-          :class="{ recording: chatStore.isRecording }"
-          @touchstart.prevent="startRecording"
-          @touchend.prevent="stopRecording"
-          @mousedown="startRecording"
-          @mouseup="stopRecording"
-          @mouseleave="stopRecording"
+          v-if="textInput.trim()"
+          class="send-btn"
+          @click="handleSendText"
         >
-          <svg v-if="!chatStore.isRecording" width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <rect x="14" y="6" width="12" height="20" rx="6" fill="white"/>
-            <path d="M8 22 C8 29.2 13.4 35 20 35 C26.6 35 32 29.2 32 22" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <line x1="20" y1="35" x2="20" y2="40" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="14" y1="40" x2="26" y2="40" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M3 11L19 3L11 19L9.5 12.5L3 11Z" fill="white"/>
           </svg>
-          <svg v-else width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <rect x="6" y="6" width="20" height="20" rx="4" fill="white"/>
+        </button>
+
+        <button
+          v-else
+          class="mic-btn"
+          :class="{ recording: chatStore.isRecording }"
+          @mousedown="startRecording"
+          @touchstart.prevent="startRecording"
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="7" y="2" width="8" height="12" rx="4" fill="white"/>
+            <path d="M4 12 C4 16.4 7.1 19 11 19 C14.9 19 18 16.4 18 12" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+            <line x1="11" y1="19" x2="11" y2="22" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <line x1="7.5" y1="22" x2="14.5" y2="22" stroke="white" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
@@ -129,10 +147,12 @@ const userStore = useUserStore()
 const chatStore = useChatStore()
 
 const messagesRef = ref(null)
+const textareaRef = ref(null)
+const textInput = ref('')
 const recognition = ref(null)
 let finalTranscript = ''
 
-onMounted(() => {
+onMounted(async () => {
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     recognition.value = new SpeechRecognition()
@@ -164,11 +184,7 @@ onMounted(() => {
   }
 
   if (chatStore.messages.length === 0) {
-    chatStore.messages.push({
-      type: 'assistant',
-      content: '您好！我是您的陪伴助手。您可以按住下面的圆圈跟我说话，我可以陪您聊天、提醒您做事。如果遇到紧急情况，请点击下方的"应急"按钮。',
-      time: new Date().toLocaleTimeString()
-    })
+    await chatStore.sendGreeting(userStore.user?.id)
   }
 })
 
@@ -188,8 +204,32 @@ const stopRecording = () => {
   }
 }
 
+const handleSendText = () => {
+  const msg = textInput.value.trim()
+  if (!msg) return
+  textInput.value = ''
+  if (textareaRef.value) {
+    textareaRef.value.style.height = 'auto'
+  }
+  handleMessage(msg)
+}
+
+const autoResize = () => {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
+
 const handleMessage = async (message) => {
   if (!message.trim()) return
+  if (!userStore.user) {
+    await userStore.restoreFromStorage()
+    if (!userStore.user) {
+      router.push('/login')
+      return
+    }
+  }
 
   const result = await chatStore.sendMessage(message, userStore.user.id)
 
@@ -271,7 +311,7 @@ const handleMessage = async (message) => {
   flex: 1;
   overflow-y: auto;
   padding: 20px 16px;
-  padding-bottom: 180px;
+  padding-bottom: 140px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -358,89 +398,138 @@ const handleMessage = async (message) => {
   padding: 0 4px;
 }
 
-.voice-area {
+.input-area {
   position: fixed;
   bottom: 72px;
   left: 0;
   right: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 20px;
-  background: linear-gradient(to top, var(--c-bg) 60%, transparent);
+  padding: 10px 14px;
+  background: linear-gradient(to top, var(--c-bg) 70%, transparent);
 }
 
-.voice-hint {
-  font-size: 14px;
+.input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: white;
+  border-radius: 26px;
+  padding: 8px 8px 8px 16px;
+  box-shadow: 0 4px 20px rgba(45, 26, 14, 0.1);
+  border: 1.5px solid var(--c-border);
+}
+
+.text-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 17px;
+  color: var(--c-text);
+  line-height: 1.5;
+  resize: none;
+  max-height: 120px;
+  padding: 4px 0;
+  font-family: inherit;
+}
+
+.text-input::placeholder {
   color: var(--c-text-3);
-  margin-bottom: 16px;
-  letter-spacing: 0.5px;
-  transition: all 0.3s;
 }
 
-.voice-hint.recording {
-  color: var(--c-primary);
-  font-weight: 600;
-}
-
-.voice-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 110px;
-  height: 110px;
-}
-
-.ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid rgba(224, 123, 57, 0.35);
-  animation: ring-expand 1.6s infinite ease-out;
-}
-
-.ring1 {
-  width: 100%;
-  height: 100%;
-}
-
-.ring2 {
-  width: 130%;
-  height: 130%;
-  animation-delay: 0.6s;
-}
-
-@keyframes ring-expand {
-  0% { transform: scale(0.8); opacity: 0.8; }
-  100% { transform: scale(1.2); opacity: 0; }
-}
-
-.voice-btn {
-  width: 90px;
-  height: 90px;
+.send-btn {
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: linear-gradient(145deg, #F4A461, #E07B39);
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 32px rgba(224, 123, 57, 0.45);
-  transition: all 0.25s;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(224, 123, 57, 0.4);
+  transition: all 0.2s;
+}
+
+.send-btn:active {
+  transform: scale(0.93);
+}
+
+.mic-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(145deg, #F4A461, #E07B39);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(224, 123, 57, 0.4);
+  transition: all 0.2s;
   user-select: none;
   -webkit-user-select: none;
-  position: relative;
-  z-index: 1;
 }
 
-.voice-btn.recording {
+.mic-btn:active {
+  transform: scale(0.93);
   background: linear-gradient(145deg, #E85D50, #C0392B);
-  box-shadow: 0 8px 32px rgba(192, 57, 43, 0.45);
-  transform: scale(1.05);
 }
 
-.voice-btn:active {
-  transform: scale(0.96);
+.recording-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border-radius: 26px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 20px rgba(45, 26, 14, 0.1);
+  border: 1.5px solid #F4D0C0;
+}
+
+.rec-waves {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.wave {
+  display: block;
+  width: 3px;
+  background: var(--c-primary);
+  border-radius: 2px;
+  animation: wave-anim 0.8s infinite ease-in-out alternate;
+}
+
+.wave:nth-child(1) { height: 8px; }
+.wave:nth-child(2) { height: 16px; }
+.wave:nth-child(3) { height: 22px; }
+.wave:nth-child(4) { height: 16px; }
+.wave:nth-child(5) { height: 8px; }
+
+@keyframes wave-anim {
+  from { transform: scaleY(0.5); opacity: 0.5; }
+  to { transform: scaleY(1); opacity: 1; }
+}
+
+.rec-text {
+  flex: 1;
+  font-size: 15px;
+  color: var(--c-primary);
+  font-weight: 500;
+}
+
+.rec-cancel {
+  background: linear-gradient(145deg, #E85D50, #C0392B);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .bottom-nav {

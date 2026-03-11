@@ -59,6 +59,31 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // 发送欢迎语（调 API 生成）
+  const sendGreeting = async (userId) => {
+    isProcessing.value = true
+    try {
+      const response = await axios.post('/api/assistant/chat', {
+        message: '你好，请用一句话简单介绍一下你自己，并问候我',
+        userId,
+        isGreeting: true
+      })
+      messages.value.push({
+        type: 'assistant',
+        content: response.data.response,
+        time: new Date().toLocaleTimeString()
+      })
+    } catch {
+      messages.value.push({
+        type: 'assistant',
+        content: '您好！我是您的陪伴助手，随时陪您聊天。',
+        time: new Date().toLocaleTimeString()
+      })
+    } finally {
+      isProcessing.value = false
+    }
+  }
+
   // 清空对话
   const clearMessages = () => {
     messages.value = []
@@ -70,6 +95,7 @@ export const useChatStore = defineStore('chat', () => {
     isPlaying,
     isProcessing,
     sendMessage,
+    sendGreeting,
     clearMessages
   }
 })
